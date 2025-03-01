@@ -5,23 +5,23 @@
 #include "motor.h"
 
 #define CONTROL_SERIAL Serial
-#define CONTROL_SERIAL_BAUD_RATE 115200
+#define CONTROL_SERIAL_BAUD_RATE 9600
 
 // Define all pins
 const byte ENC_PINS[TOTAL_ENCODER_CHANNELS][TOTAL_ENCODER_PINS] = {
-  {25, 26},
-  {27, 14}
+  {33, 25},
+  {26, 27}
 };
 const byte MOT_PINS[TOTAL_ENCODER_CHANNELS][TOTAL_MOTOR_PINS] = {
-  {18, 5},
-  {2, 15}
+  {18, 19},
+  {16, 17}
 };
 
 Motor motor_left, motor_right;
 PidControl left_pid_controller, right_pid_controller;
 
 // Constants to set loop rates
-const float PID_LOOP_RATE = 5.0;
+const float PID_LOOP_RATE = 20.0;
 const float PID_LOOP_INTERVAL_MS = (1.0 / PID_LOOP_RATE) * 1000;
 const float LPF_ALPHA = 0.3; // Low-pass filter smoothing factor
 
@@ -44,8 +44,8 @@ void setup() {
   configure_motor(&motor_right, MOT_PINS[1][0], MOT_PINS[1][1]);
 
   // Configure PID controllers
-  configure_pid_control(&left_pid_controller, 1.0 / PID_LOOP_RATE, 1, 5, 0.1);
-  configure_pid_control(&right_pid_controller, 1.0 / PID_LOOP_RATE, 1, 5, 0.1);
+  configure_pid_control(&left_pid_controller, 1.0 / PID_LOOP_RATE, 0.02, 0.2, 0.0);
+  configure_pid_control(&right_pid_controller, 1.0 / PID_LOOP_RATE, 0.02, 0.2, 0.0);
 }
 
 void process_serial_commands() {
@@ -84,7 +84,7 @@ void process_serial_commands() {
   }
 }
 
-void pid_control_loop() {
+void run_pid_control_loop() {
   update_enc_values();
   int left_encoder_delta = read_enc_delta_a() * PID_LOOP_RATE;
   int right_encoder_delta = read_enc_delta_b() * PID_LOOP_RATE;
@@ -97,6 +97,14 @@ void pid_control_loop() {
 
   control_motor(&motor_left, left_control_level);
   control_motor(&motor_right, right_control_level);
+
+  Serial.print(left_encoder_delta);
+  Serial.print(" ");
+  Serial.print(right_encoder_delta);
+  Serial.print(" ");
+  Serial.print(left_control_level);
+  Serial.print(" ");
+  Serial.println(right_control_level);
 }
 
 void loop() {
@@ -104,6 +112,6 @@ void loop() {
 
   if (millis() >= next_millis_pid) {
     next_millis_pid += PID_LOOP_INTERVAL_MS;
-    pid_control_loop();
+    run_pid_control_loop();
   }
 }

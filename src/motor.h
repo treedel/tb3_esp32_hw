@@ -42,7 +42,7 @@
 
     // Set motor PWM level (with dead zone compensation)
     void set_motor_level(Motor* motor, int level) {
-        if (level > 0 && level < MIN_MOTOR_PWM) level += MIN_MOTOR_PWM;
+        //if (level > 0 && level < MIN_MOTOR_PWM) level += MIN_MOTOR_PWM;
         level = constrain(level, 0, MAX_MOTOR_PWM);
         motor->level = level;
     }

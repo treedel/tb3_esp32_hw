@@ -1,97 +1,65 @@
 #ifndef PID_H
     #define PID_H
 
-    #define PID_OUTPUT_LIMIT 255
+    #include <PID_v1.h>
 
-    // Struct for handling PID control loop
+    #define MOTOR_CUTOFF_COUNTS 50
+
     typedef struct PidControl {
-        float loop_delay;
-        float kp;
-        float ki;
-        float kd;
-        float current_value;
-        float target_value;
-        float e;
-        float e_prev;
-        float e_integral;
-        float e_derivative;
-        long u;
+        double current_value;
+        double target_value;
+        double u;
         bool enable;
+        PID* controller;
     } PidControl;
 
-    void set_pid_constants(PidControl* pid_control, float kp, float ki, float kd) {
-        pid_control->kp = kp;
-        pid_control->ki = ki;
-        pid_control->kd = kd;
-        pid_control->e = 0;
-        pid_control->e_prev = 0;
-        pid_control->e_integral = 0;
-        pid_control->e_derivative = 0;
-        pid_control->u = 0;
-    }
-
-    void reset_pid_variables(PidControl* pid_control) {
-        pid_control->e = 0;
-        pid_control->e_prev = 0;
-        pid_control->e_integral = 0;
-        pid_control->e_derivative = 0;
-        pid_control->u = 0;
-    }
-
-    long calculate_pid_output(PidControl* pid_control, long current_value) {
-        Serial.print("Error: ");
-        Serial.print(pid_control->e);
-        Serial.print(" Integral: ");
-        Serial.print(pid_control->e_integral);
-        Serial.print(" Derivative: ");
-        Serial.println(pid_control->e_derivative);
-
-        pid_control->current_value = current_value;
-        
-        if (pid_control->enable) {
-            pid_control->e = pid_control->target_value - pid_control->current_value;
-
-            // Integral term with anti-windup
-            if (pid_control->u > -PID_OUTPUT_LIMIT && pid_control->u < PID_OUTPUT_LIMIT) {
-                pid_control->e_integral += (pid_control->e) * pid_control->loop_delay;
-            }
-
-            /* pid_control->e_derivative = (pid_control->e - pid_control->e_prev) / pid_control->loop_delay; */
-            pid_control->e_derivative = -(pid_control->current_value - pid_control->e_prev) / pid_control->loop_delay;
-            
-            pid_control->u = (pid_control->kp * pid_control->e) +
-                             (pid_control->ki * pid_control->e_integral) +
-                             (pid_control->kd * pid_control->e_derivative);
-        }
-        else {
-            reset_pid_variables(pid_control);
-        }
-        pid_control->e_prev = pid_control->current_value;
-        return pid_control->u;
-    }
-
     void enable_pid_control(PidControl* pid_control) {
-        pid_control->enable = true;
+        if (!(pid_control->enable)) {
+            (pid_control->controller)->SetMode(AUTOMATIC);
+            pid_control->enable = true;
+        }
     }
 
     void disable_pid_control(PidControl* pid_control) {
-        pid_control->enable = false;
+        if ((pid_control->enable)) {
+            (pid_control->controller)->SetMode(MANUAL);
+            pid_control->enable = false;
+        }
+    }
+
+    double calculate_pid_output(PidControl* pid_control, long current_value) {
+        pid_control->current_value = current_value;
+
+        (pid_control->controller)->Compute();
+
+        // Slow halt and stop completely
+        if (pid_control->target_value == 0 && abs(pid_control->current_value) < MOTOR_CUTOFF_COUNTS) {
+            disable_pid_control(pid_control);
+            pid_control->u = 0;
+        }
+        else {
+            enable_pid_control(pid_control);
+        }
+        
+        return pid_control->u;
     }
 
     void set_pid_target(PidControl* pid_control, long target_value) {
         pid_control->target_value = target_value;
-        if (pid_control->target_value == 0) {
-            disable_pid_control(pid_control);
-            reset_pid_variables(pid_control);
-            return;
+        if (target_value != 0) {
+            enable_pid_control(pid_control);
         }
-        if(!(pid_control->enable)) enable_pid_control(pid_control);
     }
 
     void configure_pid_control(PidControl* pid_control, float loop_delay, float kp, float ki, float kd) {
-        set_pid_constants(pid_control, kp, ki, kd);
-        pid_control->loop_delay = loop_delay;
+        pid_control->controller = new PID(&pid_control->current_value, &pid_control->u, &pid_control->target_value, kp, ki, kd, P_ON_E, DIRECT);
+        pid_control->controller->SetOutputLimits(-255, 255);
+        pid_control->controller->SetSampleTime(loop_delay);
         enable_pid_control(pid_control);
     }
 
-#endif
+    void set_pid_constants(PidControl* pid_control, float kp, float ki, float kd) {
+        pid_control->controller->SetTunings(kp, ki, kd);
+    }
+
+#endif // PID_H
